@@ -21,7 +21,7 @@ def coloca_zeros_nos_fds_e_feriados(ano):
         mes_atualizado = []
 
         for semana in range(5):  # Loop de 0 a 4 para acessar as semanas
-            semana_atualizada = mes_especifico[semana][:]  # Cria uma cópia da semana
+            semana_atualizada = mes_especifico[semana][:] 
             
             for dia in range(7):  # Loop de 0 a 6 para acessar os dias da semana
                 # Verifica se o dia é um dia válido
