@@ -1,0 +1,167 @@
+import numpy as np
+import time
+import pandas as pd
+
+# Função para calcular a aptidão de uma equipe
+def calcula_fitness_equipe(equipe, horas_maximas, quantidade_maxima_por_tipo,quantidade_minima_por_tipo,horas_disponiveis,quantidade_de_niveis):
+    
+    equipe = [int(x) for x in equipe]
+    # Calcula as horas totais trabalhadas por cada membro da equipe
+    horas_trabalhadas_por_membro = [x * y for x, y in zip(equipe, horas_disponiveis)]
+    
+    # Calcula as horas totais trabalhadas pela equipe
+    horas_totais_trabalhadas = np.sum(horas_trabalhadas_por_membro)
+    
+    # Penaliza equipes que ultrapassam as horas disponíveis
+    penalidade_horas_excedentes = (horas_maximas - horas_totais_trabalhadas)
+   
+    # Penalidade por não atingir as horas 
+    
+    # Penaliza minimo
+    penalidade_min = []
+    for ne in range(0,quantidade_de_niveis):
+        penalidade_min.append(1 if equipe[ne] < int(quantidade_minima_por_tipo[ne]) else 0)
+   
+    penalidade_equipe_minima = 100 * (sum(penalidade_min))
+    
+    # Penaliza equipes que passem do numero maximo de integrantes de cada tipo
+    penalidade_max = []
+    for ne in range(0,quantidade_de_niveis):
+        penalidade_max.append(1 if equipe[ne] > int(quantidade_maxima_por_tipo[ne]) else 0)
+    
+    penalidade_equipe_maxima = 100 * (sum(penalidade_max))
+    
+    # Se não houver pelo menos um de cada tipo, aplica penalidade máxima
+    if penalidade_equipe_minima!=0:
+        fitness = 1e-6  # Penalidade máxima (fitness próximo de zero)
+    elif penalidade_equipe_maxima != 0:
+        fitness = 1e-6
+    elif penalidade_horas_excedentes>0:
+        fitness = 1e-6
+    else:
+        # Calcula a aptidão da equipe
+        fitness = 1 / (1 + (abs(penalidade_horas_excedentes)/100))
+    
+    return fitness, horas_totais_trabalhadas
+
+
+def calcula_ag(quantidade_maxima_por_tipo,quantidade_minima_por_tipo,horas_maximas,quantidade_de_niveis,tamanho_da_populacao,taxa_de_mutacao,geracao_limit,horas_disponiveis,nomeniveis):
+    
+    # Geração aleatória da população inicial
+    #populacao = np.random.randint(0, (quantidade_maxima_por_tipo), (tamanho_da_populacao, quantidade_de_niveis))
+    populacao = np.array([[np.random.randint(0, int(max_por_tipo) + 1) for max_por_tipo in quantidade_maxima_por_tipo] for _ in range(tamanho_da_populacao)])
+    
+    
+    # Função principal
+    inicio = time.time()
+    
+    fitness_ideal = 1  # Máximo fitness possível
+    
+    # Loop de Evolução
+    for geracao in range(geracao_limit):
+        # Avaliação da aptidão
+        fitness_da_equipe = np.zeros(tamanho_da_populacao)
+        horas_totais_trabalhadas = np.zeros(tamanho_da_populacao)
+        
+        for i in range(tamanho_da_populacao):
+            fitness_da_equipe[i], horas_totais_trabalhadas[i] = calcula_fitness_equipe(populacao[i], horas_maximas, quantidade_maxima_por_tipo,quantidade_minima_por_tipo,horas_disponiveis,quantidade_de_niveis)
+        
+        # Encontrar a melhor equipe
+        melhor_idx = np.argmax(fitness_da_equipe).copy()
+        melhor_fitness_encontrada = fitness_da_equipe[melhor_idx].copy()
+        melhor_equipe = populacao[melhor_idx].copy()
+        
+       # print("Top 3 melhores fitness:", top_3_melhores_fitness)
+       # print("Top 3 melhores equipes:", top_3_melhor_equipe)
+        # Verificar critério de parada
+        melhores_indices = np.argsort(fitness_da_equipe)[::-1]
+        melhor_idx_sorted = melhores_indices[0]
+        # Inicializar listas para armazenar os top 3
+        top_3_melhores_fitness = []
+        top_3_melhor_equipe = []
+        top_3_horas_trabalhadas = []
+        
+        # Adicionar o primeiro lugar
+        top_3_melhores_fitness.append(fitness_da_equipe[melhores_indices[0]])
+        top_3_melhor_equipe.append(populacao[melhores_indices[0]].copy())
+        top_3_horas_trabalhadas.append(horas_totais_trabalhadas[melhores_indices[0]])
+        # Iterar sobre os outros candidatos a top 3
+        for i in range(1, len(melhores_indices)):
+            idx = melhores_indices[i]
+            # Verificar se o fitness e a equipe são diferentes dos anteriores
+            existeigual = any(np.array_equal(populacao[idx] , equipe) for equipe in top_3_melhor_equipe)
+            if  existeigual == False:
+                top_3_melhores_fitness.append(fitness_da_equipe[idx].copy())
+                top_3_melhor_equipe.append(populacao[idx].copy())
+                top_3_horas_trabalhadas.append(horas_totais_trabalhadas[idx].copy())
+            
+            
+            # Se já temos os top 3, sair do loop
+            if len(top_3_melhores_fitness) == 3 or i==len(melhores_indices)-1:
+                break
+        
+        # Se o top 3 chegou na fitness =1, ai que ele para
+        if top_3_melhores_fitness[0] >= fitness_ideal and top_3_melhores_fitness[1] >= fitness_ideal and top_3_melhores_fitness[2] >= fitness_ideal:
+            break
+        
+        # Seleção de pais (roleta viciada)
+        pais = np.zeros((tamanho_da_populacao, quantidade_de_niveis))
+        for i in range(tamanho_da_populacao):
+            idx1 = np.random.randint(0, tamanho_da_populacao)
+            idx2 = np.random.randint(0, tamanho_da_populacao)
+            if fitness_da_equipe[idx1] > fitness_da_equipe[idx2]:
+                pais[i] = populacao[idx1]
+            else:
+                pais[i] = populacao[idx2]
+        
+        # Elitismo
+        offspring = np.zeros((tamanho_da_populacao, quantidade_de_niveis))
+        offspring[0] = melhor_equipe  # copia o melhor pai
+        
+        # Crossover
+        for i in range(tamanho_da_populacao - 1):
+            # Ponto de crossover aleatório
+            ponto_de_crossover = np.random.randint(0, quantidade_de_niveis - 1)
+            indice_pai_1 = np.random.randint(0, tamanho_da_populacao)
+            indice_pai_2 = np.random.randint(0, tamanho_da_populacao)
+            # Aplica o crossover
+            offspring[i + 1, :ponto_de_crossover] = pais[indice_pai_1, :ponto_de_crossover]
+            offspring[i + 1, ponto_de_crossover:] = pais[indice_pai_2, ponto_de_crossover:]
+        
+        # Mutação
+        for i in range(tamanho_da_populacao):
+            for j in range(quantidade_de_niveis):
+                if np.random.rand() < taxa_de_mutacao:
+                    # Incrementa ou decrementa um membro da equipe
+                    offspring[i, j] += np.random.randint(-1, 2)
+        
+        # Atualização da população
+        populacao = offspring.copy()
+    
+    # Exibir resultados
+    fim = time.time()
+
+
+    # Criar um DataFrame com os três melhores resultados
+    df_top_3 = pd.DataFrame(columns=nomeniveis + ['Fitness', 'Horas','Horas máximas'])
+
+# Adicionar os três melhores resultados ao DataFrame
+    for j in range(0,len(top_3_melhor_equipe)):
+        linha = np.append(top_3_melhor_equipe[j], [top_3_melhores_fitness[j], top_3_horas_trabalhadas[j], horas_maximas])
+        df_top_3.loc[f'Melhor Equipe {j+1}'] = linha
+        
+    # Mostrar o DataFrame
+    print("\nOs top 3 melhores resultados:")
+    print(df_top_3)
+    
+    # Criar um DataFrame com os dados da simulação
+    df_simulacao = pd.DataFrame(columns=['Tempo (segundos)', 'Geração Final'])
+    
+    # Adicionar os dados da simulação ao DataFrame
+    df_simulacao.loc['Simulação'] = [fim - inicio, geracao]
+    
+    # Mostrar o DataFrame
+    print("\nDados da simulação:")
+    print(df_simulacao)
+
+    return df_top_3,df_simulacao
