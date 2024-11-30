@@ -1,0 +1,113 @@
+import pandas as pd
+
+def get_inputs_tarefas():
+    # 1 - primeiro input (quantidade de conjuntos)
+    quantidade_conjuntos = int(input("Qual a quantidade de conjuntos? "))
+    nomedosconjuntos = []
+
+    # 2 - segundo input (nome dos conjuntos)
+    for conjuntos in range(0, quantidade_conjuntos):
+        nome = input("Indique o nome do conjunto {}: ".format(conjuntos + 1)) 
+        nomedosconjuntos.append(nome)
+        
+    # 3 - Quantidade de relatorios de cada conjunto
+    quantidaderelatorio = []
+    for conjuntos in range(0, quantidade_conjuntos):
+        quantidade = int(input("Indique a quantidade de relatórios do conjunto {}: ".format(nomedosconjuntos[conjuntos]) )) 
+        quantidaderelatorio.append(quantidade)
+        
+    # 4 - Para cada conjunto, indique o mês de início
+    mesdeinicio = []
+    for conjuntos in range(0, quantidade_conjuntos):
+        mes_de_inicio = int(input("Digite o número do mês de início (entre 1 e 12) do conjunto {}: ".format(nomedosconjuntos[conjuntos]) )) 
+        mesdeinicio.append(mes_de_inicio)    
+        
+    # 5 - Para cada conjunto, indique periodicidade
+    periodicidade = []
+    for conjuntos in range(0, quantidade_conjuntos):
+        periodo_por_conjunto = int(input("Indique a periodicidade (em número de meses) do conjunto {}: ".format(nomedosconjuntos[conjuntos]) )) 
+        periodicidade.append(periodo_por_conjunto)
+        
+    return nomedosconjuntos, quantidaderelatorio, mesdeinicio, periodicidade
+
+
+def get_inputs_equipe(nomedosconjuntos, quantidaderelatorio):
+    # 1 - Quantidade de áreas do conhecimento do projeto
+    quantidade_areas = int(input("Qual a quantidade de áreas de conhecimento do projeto? "))
+
+    # 2 - Nome das áreas de conhecimento do projeto
+    nomedasareas = []
+    for areas in range(0, quantidade_areas):
+        nome = input("Indique o nome da área {}: ".format(areas + 1))
+        nomedasareas.append(nome)
+
+    # Dicionário para armazenar as horas por área, cada área contém um dicionário de conjuntos
+    horas_por_area = {}
+    horas_por_area_com_majoracao = {}
+    # 3 - Cálculo das horas para cada relatório para cada área do conhecimento
+    for area in nomedasareas:
+        print("\n Considere a área {}: ".format(area))
+
+        # Dicionário para armazenar as horas por conjunto, cada conjunto contém uma lista de horas por relatório
+        horas_por_conjunto = {}
+        horas_por_conjunto_com_majoracao = {}
+
+        for conjunto, nome_conjunto in enumerate(nomedosconjuntos, start=1):
+            print("Considere os relatórios do tipo {}: ".format(nome_conjunto))
+
+            horas_por_relatorio = []
+            horas_por_relatorio_com_majoracao = []
+            if quantidaderelatorio[conjunto - 1] > 1:
+                
+                while True:
+                    horasiguais = int(input('As horas da equipe são as mesmas para todos os relatórios? (1-sim/0-não) '))
+                    if horasiguais == 1 or horasiguais == 0:
+                        break
+                    else:
+                        print("Entrada inválida. Por favor, digite '1' para sim ou '0' para não.")
+
+                if horasiguais == 1:
+                    horas = float(input("Qual a quantidade de horas deste relatório para esta equipe? "))
+                    horas_com_majoracao = horas*1.1
+                    for _ in range(0, quantidaderelatorio[conjunto - 1]):
+                        horas_por_relatorio.append(horas)
+                        horas_por_relatorio_com_majoracao.append(horas_com_majoracao)
+
+                else:  # Se não for a mesma quantidade de horas para todos
+                    for rel in range(0, quantidaderelatorio[conjunto - 1]):
+                        horas = float(input("Qual a quantidade de horas do relatório {}: ".format(rel + 1)))
+                        horas_com_majoracao = horas*1.1
+                        horas_por_relatorio.append(horas)
+                        horas_por_relatorio_com_majoracao.append(horas_com_majoracao)
+
+            else:  # Se só tem um relatório
+                horas = float(input("Qual a quantidade de horas para fazer o relatório? "))
+                horas_com_majoracao = horas*1.1
+                horas_por_relatorio.append(horas)
+                horas_por_relatorio_com_majoracao.append(horas_com_majoracao)
+            # Adiciona as horas por relatório para este conjunto
+            horas_por_conjunto[nome_conjunto] = horas_por_relatorio
+            horas_por_conjunto_com_majoracao[nome_conjunto] = horas_por_relatorio_com_majoracao
+
+        # Adiciona as horas por conjunto para esta área
+        horas_por_area[area] = horas_por_conjunto
+        horas_por_area_com_majoracao[area] = horas_por_conjunto_com_majoracao
+
+    return horas_por_area,horas_por_area_com_majoracao,nomedasareas
+
+# Função para criar a tabela final
+def cria_tabela_final_tarefas(nomedosconjuntos, quantidaderelatorio, mesdeinicio, periodicidade):
+    data = []  # Lista para armazenar os dados da tabela
+    
+    for conjuntos, nome_conjunto in enumerate(nomedosconjuntos, start=1):
+        linha = []  # Lista para armazenar os dados de cada linha
+        for mes in range(1, 13):
+            if mes >= mesdeinicio[conjuntos - 1] and (mes - mesdeinicio[conjuntos - 1]) % periodicidade[conjuntos - 1] == 0:
+                linha.append(quantidaderelatorio[conjuntos - 1])  # Adiciona a quantidade de relatórios
+            else:
+                linha.append(0)  # Preenche com 0 se não houver relatório nesse mês
+        data.append(linha)  # Adiciona a linha à tabela
+        
+    # Cria o DataFrame do pandas com os dados
+    df = pd.DataFrame(data, index=nomedosconjuntos, columns=range(1, 13))
+    return df
