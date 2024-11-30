@@ -43,11 +43,6 @@ def faz_tabelas_de_entrada(horas_por_area,nomedasareas,nomedosconjuntos,nome_arq
     tabela_horastotaisporarea = tabela_horastotaisporarea.rename(columns=nomes_meses)
     tabela_horastotaisporarea.to_excel('Tabelas/Tabela_horastotais_porarea_mes_'+nome_arquivo_excel+'_'+ nomefinal+'.xlsx', index=True, engine='openpyxl')
 
-    
-
-
-    
-# Fazer um main aqui depois
 
 # Obter inputs
 nomedosconjuntos, quantidaderelatorio, mesdeinicio, periodicidade = get_inputs_tarefas()
