@@ -1,0 +1,268 @@
+from Input_Tarefas import get_inputs_tarefas, get_inputs_equipe, cria_tabela_final_tarefas
+from Calendario_com_feriados import calcula_horas_disponiveis
+import math
+from operator import truediv
+import pandas as pd
+from Algotimo_Genetico import calcula_ag
+import numpy as np
+import os
+
+
+# Funções de Salvar
+
+def faz_tabelas_de_entrada(horas_por_area,nomedasareas,nomedosconjuntos,nome_arquivo_excel,nomefinal,tabela_tarefas,horas_totais_por_area):
+
+    # Fazendo arquivo da tabela de áreas por horas de cada conjunto
+    tabela_horasporconjunto = []
+    for a in range(0,len(nomedasareas)):
+        area = nomedasareas[a]
+        horas_por_conjunto = horas_por_area[area]
+        linha = []
+        
+        for c in range(0,len(nomedosconjuntos)):
+            conjunto = nomedosconjuntos[c]
+            quantidade_horas = sum(horas_por_conjunto[conjunto])
+            linha.append(quantidade_horas)
+        tabela_horasporconjunto.append(linha)
+    
+    tabela_horasporconjunto = pd.DataFrame(tabela_horasporconjunto, index=nomedasareas, columns=nomedosconjuntos)
+    tabela_horasporconjunto.to_excel('Tabelas/HorasPorConjunto_'+nome_arquivo_excel+'_' + nomefinal+'.xlsx', index=True, engine='openpyxl')
+   
+    # Fazendo a tabela de relatorios por conjunto por mês
+    nomes_meses = {
+        1: 'janeiro', 2: 'fevereiro', 3: 'março', 4: 'abril', 5: 'maio', 6: 'junho', 
+        7: 'julho', 8: 'agosto', 9: 'setembro', 10: 'outubro', 11: 'novembro', 12: 'dezembro'
+    }
+    tabela_tarefas.rename(columns=nomes_meses, inplace=True)
+    tabela_tarefas.to_excel('Tabelas/Tabela_relatorios_mes_'+nome_arquivo_excel+'_'+ nomefinal+'.xlsx', index=True, engine='openpyxl')
+
+
+    # Fazendo a tabela de horas totais por area 
+    nomes_meses = {0: 'janeiro', 1: 'fevereiro', 2: 'março', 3: 'abril', 4: 'maio', 5: 'junho',  6: 'julho', 7: 'agosto', 8: 'setembro', 9: 'outubro', 10: 'novembro', 11: 'dezembro' }   
+    tabela_horastotaisporarea = pd.DataFrame(horas_totais_por_area, index=nomedasareas)
+    tabela_horastotaisporarea = tabela_horastotaisporarea.rename(columns=nomes_meses)
+    tabela_horastotaisporarea.to_excel('Tabelas/Tabela_horastotais_porarea_mes_'+nome_arquivo_excel+'_'+ nomefinal+'.xlsx', index=True, engine='openpyxl')
+
+    
+
+
+    
+# Fazer um main aqui depois
+
+# Obter inputs
+nomedosconjuntos, quantidaderelatorio, mesdeinicio, periodicidade = get_inputs_tarefas()
+tabela_tarefas = cria_tabela_final_tarefas(nomedosconjuntos, quantidaderelatorio, mesdeinicio, periodicidade)
+horas_por_area_sem_majoracao, horas_por_area_com_majoracao, nomedasareas = get_inputs_equipe(nomedosconjuntos, quantidaderelatorio)
+
+# Verifica se o usuário quer fazer estimativa botton-up
+while True:
+    majoracao = input('Você deseja realizar a estimativa com majoração? (s/n): ').lower()
+    if majoracao == 's' or majoracao == 'n':
+        break
+    else:
+        print("Entrada inválida. Por favor, digite 's' para sim ou 'n' para não.")
+
+if majoracao == 's':
+    fim_loop = 2   
+else:
+    fim_loop = 1
+    
+# O primeiro loop é sem majoração e o segundo é com.
+# Caso seja pedida majoração, calcula os dois para fins de comparação
+for lm in range(0,fim_loop):
+   
+    if lm == 0:
+        nomefinal = 'sem_majoracao'
+        horas_por_area = horas_por_area_sem_majoracao
+    else:
+        nomefinal = 'com_majoracao'
+        horas_por_area = horas_por_area_com_majoracao
+
+    # Calcular horas finais por área
+    horas_finais_por_area = []
+    for a in range(0, len(nomedasareas)):
+        area = nomedasareas[a]
+        horas_por_conjunto = []
+        
+        for c in range(0, len(nomedosconjuntos)):
+            conjunto = nomedosconjuntos[c]
+            tabela_atividades = tabela_tarefas.loc[conjunto].tolist()
+            horas_da_area = horas_por_area[area]  # Acessando diretamente, pois horas_por_area é um dicionário
+            valor_conjunto = horas_da_area[conjunto]  # Acessando diretamente, pois valor_conjunto parece ser uma lista
+            
+            horas_por_mes = []
+            
+            for m in range(0, len(tabela_atividades)):
+                if tabela_atividades[m] == 1:
+                    horas_por_mes.append(tabela_atividades[m] * valor_conjunto[0])
+                elif tabela_atividades[m] == 0:
+                    horas_por_mes.append(0)
+                else:
+                    horas_por_mes.append(sum(valor_conjunto))
+                    
+            horas_por_conjunto.append(horas_por_mes)
+        
+        horas_finais_por_area.append(horas_por_conjunto)
+
+    # Calcular horas totais por área
+    horas_totais_por_area = [[sum(valores) for valores in zip(*area)] for area in horas_finais_por_area]
+    
+    if lm == 0: # sem  majoraçao
+        horas_totais_por_area_sem_majoracao = horas_totais_por_area
+        # So pergunta na primeira vez
+        ano_atual = int(input('Qual o ano-base que você quer calcular a equipe? ex: 2024, 2025...'))
+      
+    
+    #Calcular horas necessárias por equipe   
+    horas_pelo_calendario = calcula_horas_disponiveis(ano_atual)
+    corpo_tecnico_necessario = [[math.ceil(x) for x in map(truediv, area, horas_pelo_calendario)] for area in horas_totais_por_area]
+    
+    
+    # Criar DataFrame com resultados
+    resultado = pd.DataFrame(corpo_tecnico_necessario, index=nomedasareas)
+    
+    # Renomear as colunas do DataFrame
+    nomes_meses = {
+        0: 'janeiro', 1: 'fevereiro', 2: 'março', 3: 'abril', 4: 'maio', 5: 'junho', 
+        6: 'julho', 7: 'agosto', 8: 'setembro', 9: 'outubro', 10: 'novembro', 11: 'dezembro'
+    }
+    resultado.rename(columns=nomes_meses, inplace=True)
+    
+    # Salvar em Excel, se o usuário desejar
+
+        
+    
+    if lm ==0:
+        nome_arquivo_excel = input("Digite o nome do arquivo Excel: ")
+        resultado.to_excel('Tabelas/'+nome_arquivo_excel+'_'+nomefinal+'.xlsx', index=True, engine='openpyxl')        
+        print("Resultado dos dados sem majoração salvo com sucesso na pasta Tabelas")   
+    else:
+        resultado.to_excel('Tabelas/'+nome_arquivo_excel+'_'+nomefinal+'.xlsx', index=True, engine='openpyxl')        
+        print("Resultado dos dados com majoração salvo com sucesso na pasta Tabelas")
+
+    
+    # Fazendo as Tabelas finais
+    faz_tabelas_de_entrada(horas_por_area,nomedasareas,nomedosconjuntos,nome_arquivo_excel,nomefinal,tabela_tarefas,horas_totais_por_area)
+
+
+# Parte de AG
+
+# 1 - Recebe inputs ag
+while True:
+    ag = input('Você deseja realizar a estimativa utilizando Algoritmos Genéticos? (s/n) ').lower()
+    if ag == 's' or ag == 'n':
+        break
+    else:
+        print("Entrada inválida. Por favor, digite 's' para sim ou 'n' para não.")
+
+if ag == 's':
+    
+    # Parâmetros Gerais de simulação
+    tamanho_da_populacao = 2500
+    taxa_de_mutacao = 0.10
+    geracao_limit = 3000
+    
+    # 1
+    quantidade_de_niveis = int(input('Qual a quantidade de níveis de profissionais?'))# Quantidade de níveis que tem em uma equipe
+   
+    # 2
+    nome_niveis = []
+    for i in range(0, quantidade_de_niveis):
+        nome_niveis.append(input('Digite o nome do nível {}: '.format(i + 1)))
+   
+    # 3 
+    quantidade_maxima_por_tipo = []
+    for i in range(0, quantidade_de_niveis):
+        quantidade_maxima_por_tipo.append(input('Digite a quantidade máxima de profissionais do tipo {}: '.format(nome_niveis[i])))
+    
+    # 4 
+    quantidade_minima_por_tipo = []
+    for i in range(0, quantidade_de_niveis):
+        quantidade_minima_por_tipo.append(input('Digite a quantidade mínima de profissionais do tipo {}: '.format(nome_niveis[i])))
+        
+    # 5 horas disponíveis por nível de profissional
+    horasdisponiveis_porarea = []
+   # for area in range(len(nomedasareas)):
+    print("Vamos agora realizar o cálculo do Algoritmo Genético")
+    print("As áreas disponíveis são:")
+    for area in range(0,len(nomedasareas)):
+        print(area+1,"-", nomedasareas[area])
+     
+     # Obtendo a preferência do usuário
+    preferencia_area = int(input("Digite o NÚMERO da área que quer realizar otimização: "))
+   
+    print('\n Agora vamos preencher informações! Considere a área', nomedasareas[preferencia_area-1])
+    horasdisponiveis_pornivel = []        
+       
+    for i in range(0, quantidade_de_niveis):
+        maxdisp = input('Os profissionais do tipo {} estão disponíveis integralmente (s/n)?: '.format(nome_niveis[i]))
+            
+        if maxdisp == 's':
+            horas_disponiveis = horas_pelo_calendario
+        else:
+            
+            while True:
+                var = int(input('Deseja inserir percentual (1) ou horas pré-estabelecidas (2)? '))
+                if var == 1 or var == 2:
+                    break
+                else:
+                    print("Entrada inválida. Por favor, digite (1) para percentual ou (2) para hora pre-estabelecida.")
+
+            if var == 1: # Se escolher percentual       
+                percentual = int(input('Informe o percentual das horas do mês que os profissionais estão disponíveis (em %): '))
+                horas_disponiveis = [hora * percentual / 100 for hora in horas_pelo_calendario]
+            else: # Se escolher horas pre-estabelecidas
+                while True:
+                    var2 = int(input('Deseja inserir uma hora do profissional a cada mês (1) ou ele está disponível a mesma quantidade de horas todos os meses? (2)'))
+                    if var2 == 1 or var2 == 2:
+                        break
+                    else:
+                        print("Entrada inválida. Por favor, (1) Deseja inserir uma hora do profissional a cada mês ou (2) ele está disponível a mesma quantidade de horas todos os meses.")
+                if var2 ==2:
+                    var3 = int(input(" Informe a quantidade de horas mensais do profissional."))
+                    horas_disponiveis= [var3 for hora in horas_pelo_calendario]
+                else:
+                    horas_disponiveis = []
+                    for i in range(1,13):
+                        print('As horas totais no mês',i, 'são', horas_pelo_calendario[i-1])
+                        horas_disponiveis.append(int(input("Sabendo disso, digite aqui as horas disponíveis desse profissional para o mês {} ".format(i))))
+                                                  
+        horasdisponiveis_pornivel.append(horas_disponiveis)
+        
+    horasdisponiveis_porarea.append(horasdisponiveis_pornivel)
+
+
+    # Rodando a simulação para cada área e cada mês
+    # Exibindo as áreas disponíveis
+         
+    # Exibindo a preferência
+    print("Vamos realizar a otimização dos profissionais da área: ", preferencia_area)
+    print("Aguarde o cálculo do AG a cada mês....")
+    resultados_ag_por_mes = []
+    ha= horasdisponiveis_porarea[preferencia_area-1]
+    for mes in range(0,12):           
+        horas_disponiveis = []
+        for hd in range(0,len(nome_niveis)):
+            horas_disponiveis.append(ha[hd][mes])
+   
+        horas_maximas = horas_totais_por_area_sem_majoracao[preferencia_area-1][mes]
+        
+        
+        # Rodando no matlab
+        resultado_ag,dados_simulacao = calcula_ag(quantidade_maxima_por_tipo,quantidade_minima_por_tipo,horas_maximas,quantidade_de_niveis,tamanho_da_populacao,taxa_de_mutacao,geracao_limit,horas_disponiveis,nome_niveis)
+        resultados_ag_por_mes.append(resultado_ag)
+        print("Rodou o AG para o mês"+ str(mes+1))
+        
+    while True:
+        salvar = input('Você deseja salvar o resultado do AG em excel?(s/n) ').lower()
+        if salvar == 's' or salvar == 'n':
+            break
+        else:
+            print("Entrada inválida. Por favor, digite 's' para sim ou 'n' para não.")
+
+    if salvar == 's':
+        nomes_meses = { 1: 'janeiro', 2: 'fevereiro', 3: 'março', 4: 'abril', 5: 'maio', 6: 'junho',  7: 'julho', 8: 'agosto', 9: 'setembro', 10: 'outubro', 11: 'novembro', 12: 'dezembro' }
+        if not os.path.exists('Tabelas/'):
+            os.makedirs('Tabelas/')
+        for mes in range(1, 13):
+            resultados_ag_por_mes[mes - 1].to_excel('Tabelas/ResultadoAlgoritmoGenetico_'+nomedasareas[preferencia_area-1]+'_'+nomes_meses[mes]+'.xlsx', index=True, engine='openpyxl')
